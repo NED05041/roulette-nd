@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>הבית של הסלולר - רולטה משופרת</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; direction: rtl; background-color: #f7f7f7; }
+        .roulette-container { position: relative; margin: 30px auto; width: 350px; height: 350px; box-shadow: 0 0 20px rgba(0,0,0,0.1); border-radius: 50%; overflow: hidden; background-color: white; display: none; cursor: pointer; }
+        canvas { width: 100%; height: 100%; }
+        button { padding: 12px 25px; font-size: 20px; cursor: pointer; margin-top: 20px; border: none; border-radius: 25px; background-color: #4caf50; color: white; transition: background-color 0.3s; }
+        button:hover { background-color: #45a049; }
+        #result { margin-top: 20px; font-size: 22px; font-weight: bold; color: #333; }
+        .form-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            border-radius: 10px;
+            width: 300px;
+            z-index: 1000;
+            display: block;
+        }
+        .settings-container { margin: 20px auto; padding: 20px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 10px; width: 300px; display: none; }
+        input, textarea { width: 90%; padding: 10px; margin-top: 10px; border: 1px solid #ddd; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>רולטת פרסים ND 🎁</h1>
+
+    <div class="form-container" id="form-container">
+        <h3>מלאו פרטים לפני הסיבוב</h3>
+        <input type="text" id="fullname" placeholder="שם מלא" required><br>
+        <input type="text" id="phone" placeholder="טלפון" required><br>
+        <input type="text" id="address" placeholder="כתובת" required><br>
+        <button id="submit-form">שלח</button>
+    </div>
+
+    <div class="roulette-container" id="roulette-container">
+        <canvas id="roulette" width="350" height="350"></canvas>
+    </div>
+
+    <div id="result"></div>
+
+    <button id="settings-btn">ND</button>
+
+    <div class="settings-container" id="settings-container">
+        <h3>הגדר פרסים לכל רמה</h3>
+        <strong>רמה 1</strong>
+        <textarea id="prizes-level-1" rows="3"></textarea>
+        <strong>רמה 2</strong>
+        <textarea id="prizes-level-2" rows="3"></textarea>
+        <strong>רמה 3</strong>
+        <textarea id="prizes-level-3" rows="2"></textarea>
+
+        <div style="text-align:right; margin-top:10px;">
+            <p>זכיות רמה 1: <span id="level1-count">0</span></p>
+            <p>זכיות רמה 2: <span id="level2-count">0</span></p>
+            <p>זכיות רמה 3: <span id="level3-count">0</span></p>
+        </div>
+
+        <button id="save-prizes-btn">שמור הגדרות</button>
+    </div>
+
+    <script>
+        let level1Count = 0, level2Count = 0, level3Count = 0;
+        let prizes = {1: ["מגן מסך", "כיסוי סיליקון", "10% הנחה"], 2: ["אוזניות מתנה", "מטען חינם"], 3: ["סמארטפון מתנה"]};
+        const canvas = document.getElementById('roulette');
+        const ctx = canvas.getContext('2d');
+        const result = document.getElementById('result');
+        const apiUrl = "https://script.google.com/macros/s/AKfycbwraXvU1_F_AKG2Kj2lynlWX0Vz-WuvhNq5b0c6beRzzaQ2WHAokCOj78zQOdSjTj0/exec";
+
+        function drawRoulette(allPrizes) {
+            const segments = allPrizes.length;
+            const angle = (2 * Math.PI) / segments;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < segments; i++) {
+                ctx.beginPath();
+                ctx.moveTo(175, 175);
+                ctx.arc(175, 175, 175, angle * i, angle * (i + 1));
+                ctx.fillStyle = `hsl(${360 / segments * i}, 100%, 75%)`;
+                ctx.fill(); ctx.stroke();
+                ctx.save();
+                ctx.translate(175, 175);
+                ctx.rotate(angle * (i + 0.5));
+                ctx.textAlign = "right";
+                ctx.fillStyle = "#000"; ctx.font = "16px Arial";
+                ctx.fillText(allPrizes[i], 165, 10);
+                ctx.restore();
+            }
+        }
+
+        function updateCounters() {
+            document.getElementById('level1-count').innerText = level1Count;
+            document.getElementById('level2-count').innerText = level2Count;
+            document.getElementById('level3-count').innerText = level3Count;
+        }
+
+        function spinRoulette() {
+            let currentLevel = level1Count >= 9 ? (level2Count >= 7 ? 3 : 2) : 1;
+            const levelPrizes = prizes[currentLevel];
+            if (!levelPrizes || levelPrizes.length === 0) return;
+
+            const prizeIndex = Math.floor(Math.random() * levelPrizes.length);
+            const prize = levelPrizes[prizeIndex];
+
+            let anglePerSegment = 360 / (prizes[1].length + prizes[2].length + prizes[3].length);
+            let prizeAngleOffset = anglePerSegment * prizeIndex;
+            let spinAngle = 3600 + (360 - prizeAngleOffset);
+            let duration = 3000;
+            let start = performance.now();
+
+            function animate(now) {
+                const elapsed = now - start;
+                if (elapsed < duration) {
+                    const rotation = spinAngle * (elapsed / duration);
+                    ctx.save();
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.translate(175, 175);
+                    ctx.rotate((rotation * Math.PI) / 180);
+                    ctx.translate(-175, -175);
+                    drawRoulette([...prizes[1], ...prizes[2], ...prizes[3]]);
+                    ctx.restore();
+                    requestAnimationFrame(animate);
+                } else {
+                    result.innerHTML = `זכית ב: ${prize} 🎉`;
+                    if(currentLevel === 1) level1Count++;
+                    if(currentLevel === 2){ level2Count++; level1Count=0; }
+                    if(currentLevel === 3){ level3Count++; level2Count=0; }
+                    updateCounters();
+
+                    // שליחת נתוני הזכייה ל-Google Sheets
+                    const data = {
+                        fullname: document.getElementById('fullname').value,
+                        phone: document.getElementById('phone').value,
+                        address: document.getElementById('address').value,
+                        prize: prize
+                    };
+
+                    fetch(apiUrl, {
+                        method: "POST",
+                        mode: "no-cors",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(data)
+                    });
+
+                    setTimeout(() => {
+                        document.getElementById('form-container').style.display = 'block';
+                        document.getElementById('fullname').value = "";
+                        document.getElementById('phone').value = "";
+                        document.getElementById('address').value = "";
+                    }, 1000);
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+
+        document.getElementById('submit-form').onclick = () => {
+            const fullname = document.getElementById('fullname').value;
+            const phone = document.getElementById('phone').value;
+            const address = document.getElementById('address').value;
+            if (!fullname || !phone || !address) { alert('יש למלא את כל השדות בטופס!'); return; }
+            document.getElementById('form-container').style.display = 'none';
+            document.getElementById('roulette-container').style.display = 'block';
+            drawRoulette([...prizes[1], ...prizes[2], ...prizes[3]]);
+        };
+
+        document.getElementById('save-prizes-btn').onclick = () => {
+            prizes[1] = document.getElementById('prizes-level-1').value.trim().split('\n').filter(Boolean);
+            prizes[2] = document.getElementById('prizes-level-2').value.trim().split('\n').filter(Boolean);
+            prizes[3] = document.getElementById('prizes-level-3').value.trim().split('\n').filter(Boolean);
+            localStorage.setItem('prizes', JSON.stringify(prizes));
+            drawRoulette([...prizes[1], ...prizes[2], ...prizes[3]]);
+            updateCounters();
+            document.getElementById('settings-container').style.display = 'none';
+        };
+
+        document.getElementById('settings-btn').onclick = () => {
+            const code = prompt('הכנס קוד גישה להגדרות:');
+            if (code === '05041') {
+                document.getElementById('settings-container').style.display = 'block';
+                document.getElementById('prizes-level-1').value = prizes[1].join('\n');
+                document.getElementById('prizes-level-2').value = prizes[2].join('\n');
+                document.getElementById('prizes-level-3').value = prizes[3].join('\n');
+                updateCounters();
+            } else alert('קוד שגוי!');
+        };
+
+        document.getElementById('roulette-container').addEventListener('click', () => {
+            if (document.getElementById('form-container').style.display === 'block') return;
+            spinRoulette();
+        });
+
+        const savedPrizes = localStorage.getItem('prizes');
+        if (savedPrizes) prizes = JSON.parse(savedPrizes);
+    </script>
+</body>
+</html>
